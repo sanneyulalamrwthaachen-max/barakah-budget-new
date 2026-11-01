@@ -7,7 +7,7 @@ var THEME_KEY = "barakah_theme";
 var EXPENSE_CATS = ["Groceries","Eating out","Rent / dorm","Health insurance","Dental insurance",
   "Internet","Mobile","Cloud & software","Education","Hobby & gadgets","Transport",
   "Family support","Donation & sadaqah","Help to relatives","Debt repayment","Semester fee","Other"];
-var INCOME_CATS = ["Working student job","Scholarship","Gift received","Other income"];
+var INCOME_CATS = ["Working student job","Scholarship","Loan repaid to me","Gift received","Other income"];
 var SADAQAH_CATS = ["Donation & sadaqah","Help to relatives"];
 var SEND_CATS = ["Family support","Help to relatives"];
 
@@ -122,6 +122,7 @@ var curMonth = todayISO().slice(0,7);
 var activeScreen = "home";
 var txType = "expense";
 var editingDebt = "";
+var debtDir = "iowe";
 var newsCache = null;
 
 /* ---------------- helpers ---------------- */
@@ -236,11 +237,19 @@ function fixedPlannedTotal(){ return fixedActive().reduce(function(a,f){ return 
 function isFixedPaid(fc, key){
   return S.tx.some(function(t){ return t.fixedId === fc.id && String(t.date||"").slice(0,7) === key; });
 }
-function monthIncome(key){
-  var actual = sumTx(monthTx(key), "income");
-  return actual > 0 ? actual : num(S.settings.monthlyIncome);
+/* Money a borrower returns is cash in, but it is not earnings.
+   It must not stand in for your salary when working out the plan. */
+function loanRepaidIn(key){
+  return monthTx(key).reduce(function(a,t){
+    return (t.type === "income" && t.category === "Loan repaid to me") ? a + txMain(t) : a;
+  },0);
 }
-function monthIncomeIsPlan(key){ return sumTx(monthTx(key), "income") <= 0; }
+function monthEarned(key){ return sumTx(monthTx(key), "income") - loanRepaidIn(key); }
+function monthIncome(key){
+  var earned = monthEarned(key);
+  return (earned > 0 ? earned : num(S.settings.monthlyIncome)) + loanRepaidIn(key);
+}
+function monthIncomeIsPlan(key){ return monthEarned(key) <= 0; }
 function monthSpent(key){ return sumTx(monthTx(key), "expense"); }
 function variableSpent(key){
   return monthTx(key).reduce(function(a,t){
@@ -256,6 +265,10 @@ function catSpent(key, cat){
 }
 function sadaqahPaid(key){
   return SADAQAH_CATS.reduce(function(a,c){ return a + catSpent(key,c); },0);
+}
+function isOwedToMe(d){ return d.direction === "theyowe"; }
+function debtsByDir(dir){
+  return S.debts.filter(function(d){ return (d.direction || "iowe") === dir; });
 }
 function debtRemaining(d){
   var cur = d.currency || "EUR";
@@ -393,35 +406,41 @@ function debtEditor(d){
     '<div class="eyebrow">Edit this loan</div>'+
     '<label class="field">Title<input type="text" value="'+esc(d.lender||"")+'" data-dedit="'+k+'|lender"></label>'+
     '<div class="grid2">'+
+      '<label class="field">Which way<select data-dedit="'+k+'|direction">'+
+        '<option value="iowe"'+(isOwedToMe(d)?"":" selected")+'>I owe someone</option>'+
+        '<option value="theyowe"'+(isOwedToMe(d)?" selected":"")+'>Someone owes me</option>'+
+      '</select></label>'+
       '<label class="field">Kind of loan<select data-dedit="'+k+'|type">'+typeOptions(d.type || "Other")+'</select></label>'+
-      '<label class="field">Who you owe it to<input type="text" value="'+esc(d.who||"")+'" data-dedit="'+k+'|who"></label>'+
     '</div>'+
     '<div class="grid2">'+
-      '<label class="field">Amount borrowed<input type="number" inputmode="decimal" step="0.01" min="0" value="'+esc(num(d.original))+'" data-dedit="'+k+'|original"></label>'+
-      '<label class="field">Currency<select data-dedit="'+k+'|currency">'+curOptions(d.currency||"EUR")+'</select></label>'+
+      '<label class="field">'+(isOwedToMe(d)?"Who owes you":"Who you owe it to")+'<input type="text" value="'+esc(d.who||"")+'" data-dedit="'+k+'|who"></label>'+
+      '<label class="field">Amount'+'<input type="number" inputmode="decimal" step="0.01" min="0" value="'+esc(num(d.original))+'" data-dedit="'+k+'|originalB"></label>'+
     '</div>'+
+    '<label class="field">Currency<select data-dedit="'+k+'|currency">'+curOptions(d.currency||"EUR")+'</select></label>'+
     '<label class="field">Note<input type="text" value="'+esc(d.note||"")+'" data-dedit="'+k+'|note"></label>'+
     '<div class="btnrow"><button class="btn sm" data-ddone="'+k+'">Done</button></div>'+
   '</div>';
 }
 
 function renderDebt(){
-  var totalLeft = 0, totalPaid = 0;
-  var html = S.debts.map(function(d){
+  var totals = {iowe:{left:0, paid:0}, theyowe:{left:0, paid:0}};
+
+  function debtCard(d){
     var r = debtRemaining(d);
-    totalLeft += r.left; totalPaid += r.paid;
+    var dir = d.direction || "iowe";
+    totals[dir].left += r.left; totals[dir].paid += r.paid;
     var p = r.original > 0 ? Math.min(100, r.paid/r.original*100) : 0;
     return '<div style="display:flex;flex-direction:column;gap:8px">'+
       '<div class="row"><div class="grow"><div class="name">'+esc(d.lender || "Untitled loan")+'</div>'+
       '<div class="meta">'+esc([d.type, d.who, d.note, (d.currency||"EUR") !== (S.settings.mainCurrency||"EUR")
-          ? "borrowed as "+money(r.raw, d.currency||"EUR") : ""].filter(Boolean).join(" · "))+'</div></div>'+
+          ? (isOwedToMe(d) ? "lent as " : "borrowed as ")+money(r.raw, d.currency||"EUR") : ""].filter(Boolean).join(" · "))+'</div></div>'+
       '<div style="text-align:right"><div class="num">'+money(r.left)+'</div>'+
       '<div class="meta">of '+money(r.original)+'</div></div></div>'+
       '<div class="bar"><i class="good" style="width:'+p+'%"></i></div>'+
       '<div class="row">'+
-        '<input type="number" inputmode="decimal" step="0.01" min="0" placeholder="Payment" data-pay-input="'+esc(d.id)+'">'+
+        '<input type="number" inputmode="decimal" step="0.01" min="0" placeholder="'+(isOwedToMe(d)?"Got back":"Payment")+'" data-pay-input="'+esc(d.id)+'">'+
         '<select data-pay-cur="'+esc(d.id)+'" style="max-width:92px">'+curOptions(d.currency || S.settings.mainCurrency)+'</select>'+
-        '<button class="btn sm" data-pay="'+esc(d.id)+'">Pay</button>'+
+        '<button class="btn sm" data-pay="'+esc(d.id)+'">'+(isOwedToMe(d)?"Received":"Pay")+'</button>'+
         '<button class="iconbtn" data-dopen="'+esc(d.id)+'" aria-label="Edit this loan">'+
         '<svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>'+
         '<button class="iconbtn" data-deldebt="'+esc(d.id)+'" aria-label="Delete debt">'+
@@ -429,10 +448,19 @@ function renderDebt(){
       '</div>'+
       (editingDebt === d.id ? debtEditor(d) : '')+
       '</div>';
-  }).join("");
-  $("dList").innerHTML = html || '<div class="empty">No loans yet. Open &ldquo;Add a debt&rdquo; below and give the loan any title you want.</div>';
-  $("dTotal").textContent = money(totalLeft);
-  $("dPaid").textContent = money(totalPaid);
+  }
+
+  var owe = debtsByDir("iowe").map(debtCard).join("");
+  var owed = debtsByDir("theyowe").map(debtCard).join("");
+  $("dList").innerHTML = owe ||
+    '<div class="empty">Nothing here. Alhamdulillah. Use &ldquo;Add a loan&rdquo; below if you borrow.</div>';
+  $("dOwedList").innerHTML = owed ||
+    '<div class="empty">Nobody owes you anything yet. Add a loan below and pick &ldquo;Someone owes me&rdquo;.</div>';
+  $("dTotal").textContent = money(totals.iowe.left);
+  $("dOwed").textContent = money(totals.theyowe.left);
+  $("dPaid").textContent = money(totals.iowe.paid);
+  $("dOweRight").textContent = debtsByDir("iowe").length + " open";
+  $("dOwedRight").textContent = debtsByDir("theyowe").length + " open";
 
   var sends = S.tx.filter(function(t){ return SEND_CATS.indexOf(t.category) >= 0; });
   var monthSends = sends.filter(function(t){ return String(t.date||"").slice(0,7) === curMonth; });
@@ -770,10 +798,15 @@ document.addEventListener("click", function(ev){
     var amt = num(input && input.value);
     if(amt <= 0){ toast("Type the payment amount."); return; }
     var payCur = (curSel && curSel.value) || "EUR";
-    S.tx.push({id:uid(), date:todayISO(), type:"expense", category:"Debt repayment",
+    var theDebt = S.debts.filter(function(d){ return d.id === id; })[0];
+    var back = theDebt && isOwedToMe(theDebt);
+    S.tx.push({id:uid(), date:todayISO(),
+      type: back ? "income" : "expense",
+      category: back ? "Loan repaid to me" : "Debt repayment",
       amount:amt, currency:payCur, rate:rateOf(payCur),
-      note:"Debt payment", person:"", fixedId:"", debtId:id});
-    persist(); render(); toast("Payment recorded."); return;
+      note: back ? "Money returned to me" : "Debt payment",
+      person: (theDebt && theDebt.who) || "", fixedId:"", debtId:id});
+    persist(); render(); toast(back ? "Money received." : "Payment recorded."); return;
   }
 
   if(el.dataset.deldebt){
@@ -791,16 +824,31 @@ document.addEventListener("click", function(ev){
 });
 
 /* --- debt --- */
+function paintDebtForm(){
+  var owed = debtDir === "theyowe";
+  $("dWhoWrap").childNodes[0].nodeValue = owed ? "Who owes you" : "Who you owe it to";
+  $("dAmountWrap").childNodes[0].nodeValue = owed ? "Amount you lent" : "Amount borrowed";
+  $("dWho").placeholder = owed ? "Person who took it" : "Person, bank or office";
+}
+document.querySelectorAll("#dDirSeg button").forEach(function(b){
+  b.addEventListener("click", function(){
+    debtDir = b.dataset.dir;
+    document.querySelectorAll("#dDirSeg button").forEach(function(x){
+      x.setAttribute("aria-selected", x === b ? "true" : "false");
+    });
+    paintDebtForm();
+  });
+});
 $("dAdd").addEventListener("click", function(){
   var name = $("dLender").value.trim();
   var amt = num($("dAmount").value);
   if(!name){ toast("Give the loan a title first."); return; }
-  if(amt <= 0){ toast("Type the amount you borrowed."); return; }
-  S.debts.push({id:uid(), lender:name, type:$("dType").value, who:$("dWho").value.trim(),
+  if(amt <= 0){ toast(debtDir === "theyowe" ? "Type the amount you lent." : "Type the amount you borrowed."); return; }
+  S.debts.push({id:uid(), lender:name, direction:debtDir, type:$("dType").value, who:$("dWho").value.trim(),
     original:amt, currency:$("dCur").value || "EUR",
     note:$("dNote").value.trim(), createdAt:todayISO()});
   $("dLender").value=""; $("dAmount").value=""; $("dNote").value=""; $("dWho").value="";
-  persist(); render(); toast("Loan added.");
+  persist(); render(); toast(debtDir === "theyowe" ? "Added to money owed to you." : "Loan added.");
 });
 $("sendAdd").addEventListener("click", function(){
   var p = $("sendPerson").value.trim();
@@ -829,9 +877,14 @@ $("zBase").addEventListener("change", function(){ S.settings.nisabBase = $("zBas
 $("zGoldPrice").addEventListener("input", function(){ S.settings.goldPerGram = num($("zGoldPrice").value); persist(); updateZakat(); });
 $("zSilverPrice").addEventListener("input", function(){ S.settings.silverPerGram = num($("zSilverPrice").value); persist(); updateZakat(); });
 $("zUseDebt").addEventListener("click", function(){
-  var total = S.debts.reduce(function(a,d){ return a + debtRemaining(d).left; },0);
-  S.zakat.debts = total; $("zDebts").value = total; persist(); updateZakat();
+  var total = debtsByDir("iowe").reduce(function(a,d){ return a + debtRemaining(d).left; },0);
+  S.zakat.debts = round2(total); $("zDebts").value = round2(total); persist(); updateZakat();
   toast("Used your total remaining debt.");
+});
+$("zUseLent").addEventListener("click", function(){
+  var total = debtsByDir("theyowe").reduce(function(a,d){ return a + debtRemaining(d).left; },0);
+  S.zakat.lent = round2(total); $("zLent").value = round2(total); persist(); updateZakat();
+  toast("Used what people still owe you.");
 });
 $("zFetchPrice").addEventListener("click", function(){
   if(!S.settings.scriptUrl){ toast("Connect your Google Sheet first, then prices can be fetched."); return; }
@@ -956,7 +1009,7 @@ document.addEventListener("change", function(ev){
     var parts = String(t.dataset.dedit).split("|");
     S.debts.forEach(function(d){
       if(d.id !== parts[0]) return;
-      if(parts[1] === "original") d.original = num(t.value);
+      if(parts[1] === "original" || parts[1] === "originalB") d.original = num(t.value);
       else d[parts[1]] = t.value;
     });
     persist(); return;
@@ -1060,6 +1113,7 @@ $("resetBtn").addEventListener("click", function(){
   fillCurSelect($("txCur"), main);
   fillCurSelect($("dCur"), main);
   fillSelect($("dType"), DEBT_TYPES, "Blocked account (Sperrkonto)");
+  paintDebtForm();
   fillCurSelect($("sendCur"), main);
   fillCurSelect($("fcCur"), main);
   fillCurSelect($("zOtherCur"), S.zakat.otherCur || "BDT");

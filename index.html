@@ -114,31 +114,42 @@
 
   <!-- ============ DEBT ============ -->
   <section class="screen" id="scr-debt" hidden>
-    <div class="tiles">
-      <div class="tile"><div class="k">Debt left</div><div class="v" id="dTotal">—</div></div>
-      <div class="tile"><div class="k">Paid back</div><div class="v good" id="dPaid">—</div></div>
+    <div class="tiles four">
+      <div class="tile"><div class="k">I owe</div><div class="v" id="dTotal">—</div></div>
+      <div class="tile"><div class="k">Owed to me</div><div class="v good" id="dOwed">—</div></div>
+      <div class="tile"><div class="k">Paid back</div><div class="v" id="dPaid">—</div></div>
       <div class="tile"><div class="k">Sent home</div><div class="v" id="dSent">—</div></div>
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>My debts</h2></div>
+      <div class="card-head"><h2>Money I owe</h2><div class="right" id="dOweRight"></div></div>
       <div class="list" id="dList"></div>
-      <details>
-        <summary>Add a debt</summary>
-        <label class="field" style="margin-top:10px">Title — whatever you call this loan
-          <input type="text" id="dLender" placeholder="e.g. Blocked account loan, Uncle's money, laptop instalments">
-        </label>
-        <div class="grid2" style="margin-top:10px">
-          <label class="field">Kind of loan<select id="dType"></select></label>
-          <label class="field">Who you owe it to<input type="text" id="dWho" placeholder="Person, bank or office"></label>
-        </div>
-        <div class="grid2" style="margin-top:10px">
-          <label class="field">Amount borrowed<input type="number" id="dAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></label>
-          <label class="field">Currency<select id="dCur"></select></label>
-        </div>
-        <label class="field" style="margin-top:10px">Note<input type="text" id="dNote" placeholder="anything you want to remember"></label>
-        <button class="btn sm" id="dAdd" style="margin-top:10px">Add debt</button>
-      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Money owed to me</h2><div class="right" id="dOwedRight"></div></div>
+      <div class="list" id="dOwedList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Add a loan</h2></div>
+      <div class="seg" id="dDirSeg">
+        <button data-dir="iowe" aria-selected="true">I owe someone</button>
+        <button data-dir="theyowe" aria-selected="false">Someone owes me</button>
+      </div>
+      <label class="field">Title — whatever you call this loan
+        <input type="text" id="dLender" placeholder="e.g. Blocked account loan, money lent to Rafi">
+      </label>
+      <div class="grid2">
+        <label class="field">Kind of loan<select id="dType"></select></label>
+        <label class="field" id="dWhoWrap">Who you owe it to<input type="text" id="dWho" placeholder="Person, bank or office"></label>
+      </div>
+      <div class="grid2">
+        <label class="field" id="dAmountWrap">Amount borrowed<input type="number" id="dAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></label>
+        <label class="field">Currency<select id="dCur"></select></label>
+      </div>
+      <label class="field">Note<input type="text" id="dNote" placeholder="anything you want to remember"></label>
+      <button class="btn" id="dAdd">Add loan</button>
     </div>
 
     <div class="card">
@@ -184,6 +195,7 @@
         <label class="field">Money people owe you (<span class="curlbl"></span>)<input type="number" id="zLent" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
         <label class="field">Investments / shares (<span class="curlbl"></span>)<input type="number" id="zInvest" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
       </div>
+      <div class="btnrow"><button class="btn sec sm" id="zUseLent">Use what people owe me</button></div>
       <div class="grid2">
         <label class="field">Savings held abroad<input type="number" id="zOther" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
         <label class="field">In which currency<select id="zOtherCur"></select></label>
