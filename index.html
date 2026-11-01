@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Personal budget, debt, zakat and halal finance news.">
+<meta name="theme-color" content="#0d6b63">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Barakah Budget">
+<meta name="robots" content="noindex, nofollow">
+<title>Barakah Budget</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Barakah <span>Budget</span></div>
+  <button class="iconbtn" id="btnTheme" title="Switch light and dark" aria-label="Switch light and dark">
+    <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+  <button class="iconbtn" id="btnSettings" title="Settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</header>
+
+<div class="monthbar" id="monthbar">
+  <button class="iconbtn" id="mPrev" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <div class="label" id="mLabel">—</div>
+  <button class="iconbtn" id="mNext" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+</div>
+
+<main>
+  <!-- ============ HOME ============ -->
+  <section class="screen" id="scr-home">
+    <div class="hero">
+      <div class="k">Left this month</div>
+      <div class="v" id="hLeft">—</div>
+      <div class="sub" id="hLeftSub"></div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="k">Income</div><div class="v" id="hIncome">—</div></div>
+      <div class="tile"><div class="k">Spent</div><div class="v" id="hSpent">—</div></div>
+      <div class="tile"><div class="k">Per day</div><div class="v" id="hPerDay">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Fixed bills</h2><div class="right" id="hFixedRight"></div></div>
+      <div class="list" id="hFixed"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Donation &amp; sadaqah</h2><div class="right" id="hDonRight"></div></div>
+      <div class="bar"><i id="hDonBar" style="width:0%"></i></div>
+      <p class="note" id="hDonNote"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Budgets</h2><div class="right">spent of planned</div></div>
+      <div class="list" id="hBudgets"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Where it went</h2></div>
+      <div class="list" id="hBreakdown"></div>
+    </div>
+  </section>
+
+  <!-- ============ SPENDING ============ -->
+  <section class="screen" id="scr-spend" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Add a record</h2></div>
+      <div class="seg" id="txTypeSeg">
+        <button data-type="expense" aria-selected="true">Money out</button>
+        <button data-type="income" aria-selected="false">Money in</button>
+      </div>
+      <div class="grid3">
+        <label class="field">Amount
+          <input type="number" id="txAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+        </label>
+        <label class="field">Currency
+          <select id="txCur"></select>
+        </label>
+        <label class="field">Date
+          <input type="date" id="txDate">
+        </label>
+      </div>
+      <label class="field">Category
+        <select id="txCat"></select>
+      </label>
+      <label class="field" id="txPersonWrap" hidden>Who did you send it to?
+        <input type="text" id="txPerson" placeholder="Name">
+      </label>
+      <label class="field">Note (optional)
+        <input type="text" id="txNote" placeholder="e.g. Lidl, keyboard, bus ticket">
+      </label>
+      <button class="btn" id="txAdd">Add record</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>This month</h2><div class="right" id="spCount"></div></div>
+      <label class="field">Filter by category
+        <select id="spFilter"></select>
+      </label>
+      <div class="list" id="spList"></div>
+    </div>
+  </section>
+
+  <!-- ============ DEBT ============ -->
+  <section class="screen" id="scr-debt" hidden>
+    <div class="tiles">
+      <div class="tile"><div class="k">Debt left</div><div class="v" id="dTotal">—</div></div>
+      <div class="tile"><div class="k">Paid back</div><div class="v good" id="dPaid">—</div></div>
+      <div class="tile"><div class="k">Sent home</div><div class="v" id="dSent">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>My debts</h2></div>
+      <div class="list" id="dList"></div>
+      <details>
+        <summary>Add a debt</summary>
+        <label class="field" style="margin-top:10px">Title — whatever you call this loan
+          <input type="text" id="dLender" placeholder="e.g. Blocked account loan, Uncle's money, laptop instalments">
+        </label>
+        <div class="grid2" style="margin-top:10px">
+          <label class="field">Kind of loan<select id="dType"></select></label>
+          <label class="field">Who you owe it to<input type="text" id="dWho" placeholder="Person, bank or office"></label>
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <label class="field">Amount borrowed<input type="number" id="dAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></label>
+          <label class="field">Currency<select id="dCur"></select></label>
+        </div>
+        <label class="field" style="margin-top:10px">Note<input type="text" id="dNote" placeholder="anything you want to remember"></label>
+        <button class="btn sm" id="dAdd" style="margin-top:10px">Add debt</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Money sent to family &amp; others</h2><div class="right" id="sendRight"></div></div>
+      <div class="grid2">
+        <label class="field">Who<input type="text" id="sendPerson" placeholder="Name"></label>
+        <label class="field">Amount<input type="number" id="sendAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></label>
+        <label class="field">Currency<select id="sendCur"></select></label>
+      </div>
+      <div class="grid2">
+        <label class="field">Date<input type="date" id="sendDate"></label>
+        <label class="field">Type
+          <select id="sendCat">
+            <option value="Family support">Family support</option>
+            <option value="Help to relatives">Help to relatives (counts as sadaqah)</option>
+          </select>
+        </label>
+      </div>
+      <button class="btn" id="sendAdd">Record transfer</button>
+      <div class="list" id="sendList"></div>
+    </div>
+  </section>
+
+  <!-- ============ ZAKAT ============ -->
+  <section class="screen" id="scr-zakat" hidden>
+    <div class="hero">
+      <div class="k">Zakat status</div>
+      <div class="v" id="zStatus">—</div>
+      <div class="sub" id="zStatusSub"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>What you own</h2><div class="right">zakatable assets</div></div>
+      <div class="grid2">
+        <label class="field">Cash in hand (<span class="curlbl"></span>)<input type="number" id="zCash" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+        <label class="field">Bank balance (<span class="curlbl"></span>)<input type="number" id="zBank" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+      </div>
+      <div class="grid2">
+        <label class="field">Gold you own (grams)<input type="number" id="zGold" inputmode="decimal" step="0.1" min="0" placeholder="0"></label>
+        <label class="field">Silver you own (grams)<input type="number" id="zSilver" inputmode="decimal" step="0.1" min="0" placeholder="0"></label>
+      </div>
+      <div class="grid2">
+        <label class="field">Money people owe you (<span class="curlbl"></span>)<input type="number" id="zLent" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+        <label class="field">Investments / shares (<span class="curlbl"></span>)<input type="number" id="zInvest" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+      </div>
+      <div class="grid2">
+        <label class="field">Savings held abroad<input type="number" id="zOther" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+        <label class="field">In which currency<select id="zOtherCur"></select></label>
+      </div>
+      <p class="note">Use the last row for money kept in another country, for example savings in taka back home.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>What you owe</h2></div>
+      <label class="field">Debts you must pay within one year (<span class="curlbl"></span>)
+        <input type="number" id="zDebts" inputmode="decimal" step="0.01" min="0" placeholder="0">
+      </label>
+      <button class="btn sec sm" id="zUseDebt">Use my debt total</button>
+      <p class="note">Only short-term debt is subtracted. A long loan you repay slowly is usually counted year by year, not all at once.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Nisab</h2><div class="right" id="zNisabRight"></div></div>
+      <label class="field">Measure nisab by
+        <select id="zBase">
+          <option value="silver">Silver — 595 g (lower limit, more people pay)</option>
+          <option value="gold">Gold — 85 g (higher limit)</option>
+        </select>
+      </label>
+      <div class="grid2">
+        <label class="field">Gold price per gram (<span class="curlbl"></span>)<input type="number" id="zGoldPrice" inputmode="decimal" step="0.01" min="0"></label>
+        <label class="field">Silver price per gram (<span class="curlbl"></span>)<input type="number" id="zSilverPrice" inputmode="decimal" step="0.01" min="0"></label>
+      </div>
+      <button class="btn sec sm" id="zFetchPrice">Get today's price</button>
+      <p class="note" id="zPriceNote">Prices change every day. Update them before you calculate.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>The year (hawl)</h2></div>
+      <label class="field">Date you first reached nisab
+        <input type="date" id="zHawl">
+      </label>
+      <p class="note" id="zHawlNote">Zakat is due after your wealth stays at or above nisab for one lunar year (354 days).</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Result</h2></div>
+      <div class="list" id="zResult"></div>
+      <p class="note">This is a simple estimate for normal savings. Business stock, pensions, crypto and mixed shares have extra rules. Ask a qualified scholar for anything unusual.</p>
+    </div>
+  </section>
+
+  <!-- ============ NEWS + LEARN ============ -->
+  <section class="screen" id="scr-news" hidden>
+    <div class="seg" id="newsSeg">
+      <button data-view="news" aria-selected="true">Halal news</button>
+      <button data-view="learn" aria-selected="false">Islamic finance</button>
+    </div>
+
+    <div id="newsView">
+      <div class="card">
+        <div class="card-head"><h2>Today's halal investing news</h2></div>
+        <div class="btnrow">
+          <button class="btn sm" id="newsRefresh">Refresh</button>
+          <span class="note" id="newsStamp"></span>
+        </div>
+        <div class="list" id="newsList"></div>
+      </div>
+    </div>
+
+    <div id="learnView" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Islamic finance basics</h2></div>
+        <p class="note">Short notes in plain words. This is general information, not financial advice.</p>
+      </div>
+      <div id="learnList" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="screen" id="scr-settings" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Currency</h2><div class="right" id="curRight"></div></div>
+      <label class="field">Main currency — every total is shown in this
+        <select id="setMainCur"></select>
+      </label>
+      <div class="grid2">
+        <label class="field">1 EUR = how many USD<input type="number" id="rateUSD" inputmode="decimal" step="0.0001" min="0"></label>
+        <label class="field">1 EUR = how many BDT<input type="number" id="rateBDT" inputmode="decimal" step="0.0001" min="0"></label>
+      </div>
+      <div class="btnrow"><button class="btn sm sec" id="ratesFetch">Get today's rates</button></div>
+      <label class="row" style="gap:8px"><input type="checkbox" id="setFreeze"> <span class="note">Keep the rate from the day each record was added</span></label>
+      <p class="note" id="ratesNote"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Money basics</h2></div>
+      <div class="grid2">
+        <label class="field">Monthly income plan (<span class="curlbl"></span>)<input type="number" id="setIncome" inputmode="decimal" step="1" min="0"></label>
+        <label class="field">Donation per month (<span class="curlbl"></span>)<input type="number" id="setDonation" inputmode="decimal" step="1" min="0"></label>
+      </div>
+      <div class="grid2">
+        <label class="field">Semester fee (<span class="curlbl"></span>)<input type="number" id="setSemFee" inputmode="decimal" step="1" min="0"></label>
+        <label class="field">Months per semester<input type="number" id="setSemMonths" inputmode="numeric" step="1" min="1"></label>
+      </div>
+      <p class="note" id="setSemNote"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Fixed monthly bills</h2></div>
+      <div class="list" id="setFixed"></div>
+      <details>
+        <summary>Add a bill</summary>
+        <div class="grid2" style="margin-top:10px">
+          <label class="field">Name<input type="text" id="fcName" placeholder="e.g. Gym"></label>
+          <label class="field">Amount<input type="number" id="fcAmount" inputmode="decimal" step="0.01" min="0"></label>
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <label class="field">Category<select id="fcCat"></select></label>
+          <label class="field">Currency<select id="fcCur"></select></label>
+        </div>
+        <button class="btn sm" id="fcAdd" style="margin-top:10px">Add bill</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Spending limits</h2><div class="right">per month</div></div>
+      <div class="list" id="setBudgets"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Google Sheet</h2><div class="right" id="syncState">not connected</div></div>
+      <label class="field">Web app URL (ends with /exec)
+        <input type="text" id="setScriptUrl" placeholder="https://script.google.com/macros/s/..../exec" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field">Secret word (same as the SECRET line in your script)
+        <input type="text" id="setSecret" placeholder="your own long secret word" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="btnrow">
+        <button class="btn sm" id="syncTest">Test</button>
+        <button class="btn sm sec" id="syncPush">Save to sheet</button>
+        <button class="btn sm sec" id="syncPull">Load from sheet</button>
+      </div>
+      <label class="row" style="gap:8px"><input type="checkbox" id="setAutoSync"> <span class="note">Save to the sheet automatically after every change</span></label>
+      <p class="note" id="sheetLinkNote"></p>
+    </div>
+
+    <details id="setupGuide">
+      <summary>How to connect Google Sheets (5 minutes)</summary>
+      <ol class="steps">
+        <li>On a computer, open <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a> and sign in with your Google account.</li>
+        <li>Click <strong>New project</strong>.</li>
+        <li>Delete everything in the editor. Then paste the code below.</li>
+        <li>Near the top, find the line <code>var SECRET = '...'</code> and replace the text with your own long secret word. Remember it.</li>
+        <li>Click the save icon. Name the project <code>Barakah Budget</code>.</li>
+        <li>Click <strong>Deploy</strong> → <strong>New deployment</strong>.</li>
+        <li>Click the gear next to "Select type" and choose <strong>Web app</strong>.</li>
+        <li>Set <strong>Execute as: Me</strong> and <strong>Who has access: Anyone</strong>.</li>
+        <li>Click <strong>Deploy</strong>. Google asks for permission — allow it. If it warns that the app is not verified, click <strong>Advanced</strong>, then <strong>Go to Barakah Budget (unsafe)</strong>. It is your own script, so this is fine.</li>
+        <li>Copy the <strong>Web app URL</strong> that ends with <code>/exec</code>.</li>
+        <li>Paste the URL and your secret word in the boxes above, then press <strong>Test</strong>.</li>
+      </ol>
+      <p class="note" style="margin-top:10px"><strong>Why "Anyone"?</strong> Your phone browser can only reach the script if it answers without a Google login screen. Your secret word is what keeps the data private — without it the script refuses every request. The spreadsheet still stays inside your own Drive. Do not share the URL or the word with anyone.</p>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn sm" id="copyCode">Copy the code</button>
+      </div>
+      <pre id="codeView"></pre>
+    </details>
+
+    <div class="card">
+      <div class="card-head"><h2>Backup</h2></div>
+      <p class="note">Your data is saved on this phone. Copy this text somewhere safe, or paste an old backup to restore it.</p>
+      <textarea id="backupBox" rows="5" spellcheck="false"></textarea>
+      <div class="btnrow">
+        <button class="btn sm" id="backupShow">Show my data</button>
+        <button class="btn sm sec" id="backupCopy">Copy</button>
+        <button class="btn sm sec" id="backupRestore">Restore from text</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn sm danger" id="resetBtn">Erase everything</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar" id="tabbar" role="tablist">
+  <button class="tab" role="tab" data-scr="home" aria-selected="true">
+    <svg viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button class="tab" role="tab" data-scr="spend" aria-selected="false">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Spending</button>
+  <button class="tab" role="tab" data-scr="debt" aria-selected="false">
+    <svg viewBox="0 0 24 24"><path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/></svg>Debt</button>
+  <button class="tab" role="tab" data-scr="zakat" aria-selected="false">
+    <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6L21 9.4l-4.5 4.3 1.1 6.3L12 17l-5.6 3 1.1-6.3L3 9.4l6.4-.8z"/></svg>Zakat</button>
+  <button class="tab" role="tab" data-scr="news" aria-selected="false">
+    <svg viewBox="0 0 24 24"><path d="M4 5h13v14H5a1 1 0 0 1-1-1z"/><path d="M17 9h3v9a1 1 0 0 1-3 0zM7 8h7M7 12h7M7 16h4"/></svg>News</button>
+</nav>
+<script src="app.js" defer></script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
