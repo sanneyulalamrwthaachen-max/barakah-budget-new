@@ -1,5 +1,7 @@
 # Barakah Budget
 
+Live: https://barakah-budget-1.vercel.app
+
 A personal finance app for a student abroad: monthly budget, debt, money sent
 home, zakat, and halal finance news. It runs as an installable web app and
 stores everything in your own Google Sheet.
