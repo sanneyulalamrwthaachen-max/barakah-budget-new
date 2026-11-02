@@ -123,6 +123,7 @@ var curMonth = todayISO().slice(0,7);
 var activeScreen = "home";
 var txType = "expense";
 var editingDebt = "";
+var editingTx = "";
 var debtDir = "iowe";
 var newsCache = null;
 
@@ -379,6 +380,54 @@ function renderHome(){
   }).join("") : '<div class="empty">Nothing recorded for this month yet.</div>';
 }
 
+/* One record, with a pencil that opens it for editing in place. */
+function txRow(t){
+  var sign = t.type === "income" ? "+" : "−";
+  var color = t.type === "income" ? "var(--good)" : "var(--fg)";
+  var orig = origNote(t);
+  var meta = [t.category, t.person, t.note, orig ? "entered as "+orig : ""].filter(Boolean).join(" · ");
+  var locked = !!(t.fixedId || t.debtId);
+  return '<div style="display:flex;flex-direction:column;gap:8px">'+
+    '<div class="row">'+
+      '<div class="grow"><div class="name">'+esc(t.date)+'</div>'+
+      '<div class="meta">'+esc(meta)+'</div></div>'+
+      '<div class="num" style="color:'+color+'">'+sign+' '+money(txMain(t))+'</div>'+
+      '<button class="iconbtn" data-topen="'+esc(t.id)+'" aria-label="Edit this record">'+
+      '<svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>'+
+      '<button class="iconbtn" data-del="'+esc(t.id)+'" aria-label="Delete">'+
+      '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>'+
+    '</div>'+
+    (editingTx === t.id ? txEditor(t, locked) : '')+
+  '</div>';
+}
+
+function txEditor(t, locked){
+  var k = esc(t.id);
+  var cats = t.type === "income" ? INCOME_CATS : EXPENSE_CATS;
+  var catOpts = cats.map(function(c){
+    return '<option value="'+esc(c)+'"'+(c===t.category?" selected":"")+'>'+esc(c)+'</option>';
+  }).join("");
+  return '<div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line-soft);padding-top:10px">'+
+    '<div class="eyebrow">Edit this record</div>'+
+    (locked ? '<p class="note">This record came from a fixed bill or a loan payment. You can change the amount, date and note here; to change what it belongs to, delete it and add it again.</p>' : '')+
+    '<div class="grid3">'+
+      '<label class="field">Amount<input type="number" inputmode="decimal" step="0.01" min="0" value="'+esc(num(t.amount))+'" data-tedit="'+k+'|amount"></label>'+
+      '<label class="field">Currency<select data-tedit="'+k+'|currency">'+curOptions(t.currency||"EUR")+'</select></label>'+
+      '<label class="field">Date<input type="date" value="'+esc(t.date||"")+'" data-tedit="'+k+'|date"></label>'+
+    '</div>'+
+    '<div class="grid2">'+
+      '<label class="field">Money in or out<select data-tedit="'+k+'|type"'+(locked?" disabled":"")+'>'+
+        '<option value="expense"'+(t.type==="expense"?" selected":"")+'>Money out</option>'+
+        '<option value="income"'+(t.type==="income"?" selected":"")+'>Money in</option>'+
+      '</select></label>'+
+      '<label class="field">Category<select data-tedit="'+k+'|category"'+(locked?" disabled":"")+'>'+catOpts+'</select></label>'+
+    '</div>'+
+    '<label class="field">Who (for transfers)<input type="text" value="'+esc(t.person||"")+'" data-tedit="'+k+'|person"></label>'+
+    '<label class="field">Note<input type="text" value="'+esc(t.note||"")+'" data-tedit="'+k+'|note"></label>'+
+    '<div class="btnrow"><button class="btn sm" data-tdone="'+k+'">Done</button></div>'+
+  '</div>';
+}
+
 function renderSpend(){
   var list = monthTx(curMonth).slice().sort(function(a,b){
     return String(b.date).localeCompare(String(a.date));
@@ -386,19 +435,8 @@ function renderSpend(){
   var filter = $("spFilter").value;
   if(filter && filter !== "__all") list = list.filter(function(t){ return t.category === filter; });
   $("spCount").textContent = list.length + (list.length===1?" record":" records");
-  $("spList").innerHTML = list.length ? list.map(function(t){
-    var sign = t.type === "income" ? "+" : "−";
-    var color = t.type === "income" ? "var(--good)" : "var(--fg)";
-    var orig = origNote(t);
-    var meta = [t.category, t.person, t.note, orig ? "entered as "+orig : ""].filter(Boolean).join(" · ");
-    return '<div class="row">'+
-      '<div class="grow"><div class="name">'+esc(t.date)+'</div>'+
-      '<div class="meta">'+esc(meta)+'</div></div>'+
-      '<div class="num" style="color:'+color+'">'+sign+' '+money(txMain(t))+'</div>'+
-      '<button class="iconbtn" data-del="'+esc(t.id)+'" aria-label="Delete">'+
-      '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>'+
-    '</div>';
-  }).join("") : '<div class="empty">Nothing here yet. Add your first record above.</div>';
+  $("spList").innerHTML = list.length ? list.map(txRow).join("")
+    : '<div class="empty">Nothing here yet. Add your first record above.</div>';
 }
 
 function debtEditor(d){
@@ -471,14 +509,8 @@ function renderDebt(){
   $("sendRight").textContent = money(yearTotal) + " in " + curMonth.slice(0,4);
 
   var recent = sends.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); }).slice(0,12);
-  $("sendList").innerHTML = recent.length ? recent.map(function(t){
-    var o = origNote(t);
-    return '<div class="row"><div class="grow"><div class="name">'+esc(t.person||"—")+'</div>'+
-      '<div class="meta">'+esc(t.date+" · "+t.category+(o ? " · sent as "+o : ""))+'</div></div>'+
-      '<div class="num">'+money(txMain(t))+'</div>'+
-      '<button class="iconbtn" data-del="'+esc(t.id)+'" aria-label="Delete">'+
-      '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>';
-  }).join("") : '<div class="empty">No transfers recorded yet.</div>';
+  $("sendList").innerHTML = recent.length ? recent.map(txRow).join("")
+    : '<div class="empty">No transfers recorded yet.</div>';
 }
 
 function zakatNumbers(){
@@ -757,8 +789,16 @@ $("spFilter").addEventListener("change", renderSpend);
 
 /* --- delegated clicks --- */
 document.addEventListener("click", function(ev){
-  var el = ev.target.closest("[data-fixed],[data-del],[data-pay],[data-deldebt],[data-fcdel],[data-dopen],[data-ddone]");
+  var el = ev.target.closest("[data-fixed],[data-del],[data-pay],[data-deldebt],[data-fcdel],[data-dopen],[data-ddone],[data-topen],[data-tdone]");
   if(!el) return;
+
+  if(el.dataset.topen){
+    editingTx = (editingTx === el.dataset.topen) ? "" : el.dataset.topen;
+    render(); return;
+  }
+  if(el.dataset.tdone){
+    editingTx = ""; persist(); render(); toast("Record updated."); return;
+  }
 
   if(el.dataset.dopen){
     editingDebt = (editingDebt === el.dataset.dopen) ? "" : el.dataset.dopen;
@@ -788,6 +828,7 @@ document.addEventListener("click", function(ev){
   }
 
   if(el.dataset.del){
+    if(editingTx === el.dataset.del) editingTx = "";
     S.tx = S.tx.filter(function(t){ return t.id !== el.dataset.del; });
     persist(); render(); toast("Deleted."); return;
   }
@@ -1005,6 +1046,27 @@ document.addEventListener("change", function(ev){
   if(t.dataset && t.dataset.fcamount){
     S.fixedCosts.forEach(function(f){ if(f.id === t.dataset.fcamount) f.amount = num(t.value); });
     persist(); return;
+  }
+  if(t.dataset && t.dataset.tedit){
+    var tp = String(t.dataset.tedit).split("|");
+    var retype = false;
+    S.tx.forEach(function(x){
+      if(x.id !== tp[0]) return;
+      if(tp[1] === "amount"){ x.amount = num(t.value); }
+      else if(tp[1] === "currency"){ x.currency = t.value; x.rate = rateOf(t.value); }
+      else if(tp[1] === "type"){
+        x.type = t.value;
+        var allowed = (t.value === "income") ? INCOME_CATS : EXPENSE_CATS;
+        if(allowed.indexOf(x.category) < 0) x.category = allowed[0];
+        retype = true;
+      }
+      else { x[tp[1]] = t.value; }
+    });
+    persist();
+    /* Only redraw when the category list itself has to change. Otherwise the
+       row would jump under your finger between one field and the next. */
+    if(retype) render();
+    return;
   }
   if(t.dataset && t.dataset.dedit){
     var parts = String(t.dataset.dedit).split("|");
