@@ -1,5 +1,5 @@
 /* Barakah Budget - offline shell. Bump VERSION to push an update. */
-var VERSION = "bb-v4";
+var VERSION = "bb-v5";
 var SHELL = [
   "./", "./index.html", "./styles.css", "./app.js",
   "./manifest.webmanifest", "./finance-sheets-script.gs",

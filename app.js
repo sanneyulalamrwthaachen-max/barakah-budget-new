@@ -5,8 +5,9 @@ var LS_KEY = "barakah_budget_v1";
 var THEME_KEY = "barakah_theme";
 
 var EXPENSE_CATS = ["Groceries","Eating out","Rent / dorm","Health insurance","Dental insurance",
-  "Internet","Mobile","Cloud & software","Education","Hobby & gadgets","Transport",
-  "Family support","Donation & sadaqah","Help to relatives","Debt repayment","Semester fee","Other"];
+  "Medicine & pharmacy","Internet","Mobile","Cloud & software","Education","Hobby & gadgets",
+  "Islamic essentials","Transport","Family support","Donation & sadaqah","Help to relatives",
+  "Debt repayment","Semester fee","Other"];
 var INCOME_CATS = ["Working student job","Scholarship","Loan repaid to me","Gift received","Other income"];
 var SADAQAH_CATS = ["Donation & sadaqah","Help to relatives"];
 var SEND_CATS = ["Family support","Help to relatives"];
