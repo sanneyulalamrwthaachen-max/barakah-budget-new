@@ -51,7 +51,7 @@ function pad(n){ return n<10 ? "0"+n : ""+n; }
 
 function freshData(){
   return {
-    version: 1,
+    version: 2,
     settings: {
       monthlyIncome: 0,
       donationGoal: 70,
@@ -80,7 +80,11 @@ function freshData(){
       {id:uid(), name:"Donation",             amount:70, currency:"EUR", category:"Donation & sadaqah", active:true},
       {id:uid(), name:"Semester fee saving",  amount:67, currency:"EUR", category:"Semester fee",     active:true}
     ],
-    budgets: {"Groceries":130,"Eating out":0,"Hobby & gadgets":0,"Education":0,"Transport":0},
+    budgets: {"Groceries":130,"Eating out":20,"Hobby & gadgets":0,"Education":0,"Transport":0},
+    alerts: {
+      "Groceries":   {warn:90, stop:117},
+      "Eating out":  {warn:15, stop:18}
+    },
     tx: [],
     debts: [],
     zakat: {cash:0,bank:0,gold:0,silver:0,lent:0,invest:0,debts:0,other:0,otherCur:"BDT",hawlStart:""}
@@ -110,6 +114,14 @@ function mergeDefaults(d){
   if(!Array.isArray(d.tx)) d.tx = [];
   if(!Array.isArray(d.debts)) d.debts = [];
   d.budgets = Object.assign({}, f.budgets, d.budgets || {});
+  d.alerts = Object.assign({}, f.alerts, d.alerts || {});
+  /* One-off: people who installed before limits existed get the two
+     the app now ships with, but only where they had set nothing. */
+  if(num(d.version) < 2){
+    if(num(d.budgets["Eating out"]) <= 0) d.budgets["Eating out"] = 20;
+    if(num(d.budgets["Groceries"]) <= 0) d.budgets["Groceries"] = 130;
+    d.version = 2;
+  }
   d.zakat = Object.assign({}, f.zakat, d.zakat || {});
   return d;
 }
@@ -265,6 +277,50 @@ function catSpent(key, cat){
     return (t.type === "expense" && t.category === cat) ? a + txMain(t) : a;
   },0);
 }
+/* Where a category stands against its limit this month.
+   warn  -> the YOLO nudge
+   stop  -> red, you are nearly out
+   over  -> past the limit */
+function budgetState(cat, key){
+  var limit = num(S.budgets[cat]);
+  var spent = catSpent(key, cat);
+  var a = S.alerts[cat] || {};
+  var warn = num(a.warn);
+  var stop = num(a.stop);
+  if(warn <= 0) warn = limit * 0.75;
+  if(stop <= 0) stop = limit * 0.90;
+
+  var level = "ok";
+  if(limit > 0){
+    if(spent > limit) level = "over";
+    else if(stop > 0 && spent >= stop) level = "stop";
+    else if(warn > 0 && spent >= warn) level = "yolo";
+  }
+  return {
+    cat: cat, limit: limit, spent: spent, warn: warn, stop: stop,
+    level: level, left: limit - spent,
+    pct: limit > 0 ? Math.min(100, spent / limit * 100) : 0
+  };
+}
+
+function watchedCategories(){
+  return Object.keys(S.budgets).filter(function(c){ return num(S.budgets[c]) > 0; });
+}
+
+function budgetBadge(st){
+  if(st.level === "over") return '<span class="pill stop">\u26a0 OVER</span>';
+  if(st.level === "stop") return '<span class="pill stop">\u26a0 STOP</span>';
+  if(st.level === "yolo") return '<span class="pill yolo">YOLO</span>';
+  return "";
+}
+
+function budgetFoot(st){
+  if(st.level === "over") return {cls:"bad",  text: money(Math.abs(st.left)) + " over your limit"};
+  if(st.level === "stop") return {cls:"bad",  text: "Only " + money(st.left) + " left \u2014 stop here"};
+  if(st.level === "yolo") return {cls:"warn", text: money(st.left) + " left \u2014 slow down"};
+  return {cls:"", text: money(st.left) + " left"};
+}
+
 function sadaqahPaid(key){
   return SADAQAH_CATS.reduce(function(a,c){ return a + catSpent(key,c); },0);
 }
@@ -299,11 +355,37 @@ function render(){
   paintCurrencyLabels();
   $("mLabel").textContent = monthLabel(curMonth);
   $("monthbar").hidden = (activeScreen === "zakat" || activeScreen === "news" || activeScreen === "settings");
-  if(activeScreen === "home") renderHome();
+  if(activeScreen === "home"){ renderAlerts(); renderHome(); }
   if(activeScreen === "spend") renderSpend();
   if(activeScreen === "debt") renderDebt();
   if(activeScreen === "zakat") renderZakat();
   if(activeScreen === "settings") renderSettings();
+}
+
+function renderAlerts(){
+  var hits = watchedCategories().map(function(c){ return budgetState(c, curMonth); })
+    .filter(function(st){ return st.level !== "ok"; })
+    .sort(function(a,b){
+      var rank = {over:0, stop:1, yolo:2};
+      return rank[a.level] - rank[b.level];
+    });
+
+  if(!hits.length){ $("hAlerts").innerHTML = ""; return; }
+
+  var worst = hits[0].level === "yolo" ? "" : " stop";
+  $("hAlerts").innerHTML =
+    '<div class="card alertcard'+worst+'">'+
+      '<div class="card-head"><h2>Watch your limits</h2></div>'+
+      hits.map(function(st){
+        var f = budgetFoot(st);
+        return '<div class="alertline">'+
+          '<div class="grow"><div class="name">'+esc(st.cat)+'</div>'+
+          '<div class="budgetfoot '+f.cls+'">'+esc(f.text)+'</div></div>'+
+          '<div class="num">'+money(st.spent)+' / '+money(st.limit)+'</div>'+
+          budgetBadge(st)+
+        '</div>';
+      }).join("")+
+    '</div>';
 }
 
 function renderHome(){
@@ -351,15 +433,18 @@ function renderHome(){
     : money(Math.max(0, goal - given)) + " left to reach your monthly amount. Help given to relatives counts here too.";
 
   // budgets
-  var bk = Object.keys(S.budgets).filter(function(c){ return num(S.budgets[c]) > 0; });
+  var bk = watchedCategories();
   $("hBudgets").innerHTML = bk.length ? bk.map(function(c){
-    var lim = num(S.budgets[c]); var sp = catSpent(curMonth, c);
-    var p = Math.min(100, lim>0 ? sp/lim*100 : 0);
-    var cls = sp > lim ? "bad" : (p > 80 ? "warn" : "good");
+    var st = budgetState(c, curMonth);
+    var f = budgetFoot(st);
+    var cls = (st.level === "over" || st.level === "stop") ? "bad"
+            : (st.level === "yolo" ? "warn" : "good");
     return '<div style="display:flex;flex-direction:column;gap:5px">'+
       '<div class="row"><div class="grow name">'+esc(c)+'</div>'+
-      '<div class="num '+(sp>lim?"":"")+'">'+money(sp)+' / '+money(lim)+'</div></div>'+
-      '<div class="bar"><i class="'+cls+'" style="width:'+p+'%"></i></div></div>';
+      budgetBadge(st)+
+      '<div class="num">'+money(st.spent)+' / '+money(st.limit)+'</div></div>'+
+      '<div class="bar"><i class="'+cls+'" style="width:'+st.pct+'%"></i></div>'+
+      '<div class="budgetfoot '+f.cls+'">'+esc(f.text)+'</div></div>';
   }).join("") : '<div class="empty">No limits set yet. Add them in Settings.</div>';
 
   // breakdown
@@ -616,10 +701,21 @@ function renderSettings(){
       '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>';
   }).join("") || '<div class="empty">No bills yet.</div>';
 
-  var cats = EXPENSE_CATS;
-  $("setBudgets").innerHTML = cats.map(function(c){
-    return '<div class="row"><div class="grow name">'+esc(c)+'</div>'+
-      '<input type="number" inputmode="decimal" step="1" min="0" style="max-width:110px" value="'+esc(num(S.budgets[c])||"")+'" placeholder="0" data-budget="'+esc(c)+'"></div>';
+  $("setBudgets").innerHTML = EXPENSE_CATS.map(function(c){
+    var lim = num(S.budgets[c]);
+    var a = S.alerts[c] || {};
+    var rows = '<div class="limitrow"><div class="name">'+esc(c)+'</div>';
+    if(lim > 0){
+      rows += '<div class="heads"><div>Limit</div><div>YOLO at</div><div>Stop at</div></div>'+
+        '<div class="inputs">'+
+          '<input type="number" inputmode="decimal" step="1" min="0" value="'+esc(lim)+'" placeholder="0" data-budget="'+esc(c)+'">'+
+          '<input type="number" inputmode="decimal" step="1" min="0" value="'+esc(num(a.warn)||"")+'" placeholder="'+Math.round(lim*0.75)+'" data-alert="'+esc(c)+'|warn">'+
+          '<input type="number" inputmode="decimal" step="1" min="0" value="'+esc(num(a.stop)||"")+'" placeholder="'+Math.round(lim*0.90)+'" data-alert="'+esc(c)+'|stop">'+
+        '</div>';
+    }else{
+      rows += '<div class="inputs"><input type="number" inputmode="decimal" step="1" min="0" value="" placeholder="no limit" data-budget="'+esc(c)+'"></div>';
+    }
+    return rows + '</div>';
   }).join("");
 }
 
@@ -677,7 +773,7 @@ function pushToSheet(quiet){
   delete safeSettings.secret;
   delete safeSettings.scriptUrl;
   return callScript({action:"save", data:{
-    settings: safeSettings, fixedCosts: S.fixedCosts, budgets: S.budgets,
+    settings: safeSettings, fixedCosts: S.fixedCosts, budgets: S.budgets, alerts: S.alerts,
     tx: S.tx, debts: S.debts, zakat: S.zakat
   }}).then(function(j){
     if(j.saved && j.saved.sheetUrl){ S.settings.sheetUrl = j.saved.sheetUrl; }
@@ -699,6 +795,7 @@ function pullFromSheet(){
     }
     if(Array.isArray(d.fixedCosts) && d.fixedCosts.length) S.fixedCosts = d.fixedCosts;
     if(d.budgets && Object.keys(d.budgets).length) S.budgets = d.budgets;
+    if(d.alerts && Object.keys(d.alerts).length) S.alerts = d.alerts;
     if(Array.isArray(d.tx)) S.tx = d.tx;
     if(Array.isArray(d.debts)) S.debts = d.debts;
     if(d.zakat && Object.keys(d.zakat).length) S.zakat = Object.assign({}, S.zakat, d.zakat);
@@ -782,7 +879,12 @@ $("txAdd").addEventListener("click", function(){
   });
   persist();
   $("txAmount").value = ""; $("txNote").value = ""; $("txPerson").value = "";
-  toast("Added.");
+  var cat = $("txCat").value;
+  var st = (txType === "expense") ? budgetState(cat, curMonth) : null;
+  if(st && st.level === "over")      toast("Added. " + cat + ": " + money(Math.abs(st.left)) + " over your limit.");
+  else if(st && st.level === "stop") toast("Added. " + cat + ": only " + money(st.left) + " left. Stop here.");
+  else if(st && st.level === "yolo") toast("Added. YOLO \u2014 " + money(st.left) + " left for " + cat + ".");
+  else                               toast("Added.");
   render();
 });
 $("spFilter").addEventListener("change", renderSpend);
@@ -1087,6 +1189,12 @@ document.addEventListener("change", function(ev){
   }
   if(t.dataset && t.dataset.budget){
     S.budgets[t.dataset.budget] = num(t.value);
+    persist(); renderSettings(); return;
+  }
+  if(t.dataset && t.dataset.alert){
+    var ap = String(t.dataset.alert).split("|");
+    if(!S.alerts[ap[0]]) S.alerts[ap[0]] = {};
+    S.alerts[ap[0]][ap[1]] = num(t.value);
     persist(); return;
   }
 });

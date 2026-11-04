@@ -209,6 +209,23 @@ main{
 .pill.good{background:var(--good-soft);color:var(--good)}
 .pill.warn{background:var(--warn-soft);color:var(--warn)}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.yolo{background:var(--warn-soft);color:var(--warn);letter-spacing:.08em;font-weight:700}
+.pill.stop{background:var(--bad-soft);color:var(--bad);letter-spacing:.06em;font-weight:700;
+  animation:breathe 1.8s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.5}}
+
+.alertcard{border-left:4px solid var(--warn)}
+.alertcard.stop{border-left-color:var(--bad)}
+.alertline{display:flex;align-items:center;gap:8px;min-width:0}
+.alertline .grow{flex:1;min-width:0}
+.budgetfoot{font-size:var(--t-sm);color:var(--fg-soft)}
+.budgetfoot.warn{color:var(--warn);font-weight:600}
+.budgetfoot.bad{color:var(--bad);font-weight:600}
+
+.limitrow{display:flex;flex-direction:column;gap:6px}
+.limitrow .heads{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+  font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.07em;color:var(--fg-faint);font-weight:600}
+.limitrow .inputs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 
 .btn{
   background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;
