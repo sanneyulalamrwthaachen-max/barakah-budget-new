@@ -63,6 +63,19 @@
       <p class="note" id="hDonNote"></p>
     </div>
 
+    <div class="card" id="hSaveCard">
+      <div class="card-head"><h2>Savings &amp; investment</h2><div class="right" id="hSaveRight"></div></div>
+      <div class="bar"><i id="hSaveBar" style="width:0%"></i></div>
+      <p class="note" id="hSaveNote"></p>
+      <div class="row">
+        <div class="grow">
+          <div class="eyebrow">Put away so far</div>
+          <div class="num" id="hSavePot" style="font-size:var(--t-xl)">—</div>
+        </div>
+        <button class="btn sm" id="hSaveAdd">Record it</button>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-head"><h2>Budgets</h2><div class="right">spent of planned</div></div>
       <div class="list" id="hBudgets"></div>
@@ -293,6 +306,9 @@
       <div class="grid2">
         <label class="field">Monthly income plan (<span class="curlbl"></span>)<input type="number" id="setIncome" inputmode="decimal" step="1" min="0"></label>
         <label class="field">Donation per month (<span class="curlbl"></span>)<input type="number" id="setDonation" inputmode="decimal" step="1" min="0"></label>
+      </div>
+      <div class="grid2">
+        <label class="field">Save or invest each month (<span class="curlbl"></span>)<input type="number" id="setSaveGoal" inputmode="decimal" step="1" min="0"></label>
       </div>
       <div class="grid2">
         <label class="field">Semester fee (<span class="curlbl"></span>)<input type="number" id="setSemFee" inputmode="decimal" step="1" min="0"></label>

@@ -7,8 +7,12 @@ var THEME_KEY = "barakah_theme";
 var EXPENSE_CATS = ["Groceries","Eating out","Rent / dorm","Health insurance","Dental insurance",
   "Medicine & pharmacy","Internet","Mobile","Cloud & software","Education","Hobby & gadgets",
   "Islamic essentials","Transport","Family support","Donation & sadaqah","Help to relatives",
-  "Debt repayment","Semester fee","Other"];
-var INCOME_CATS = ["Working student job","Scholarship","Loan repaid to me","Gift received","Other income"];
+  "Debt repayment","Semester fee","Savings & investment","Other"];
+var INCOME_CATS = ["Working student job","Scholarship","Loan repaid to me","Savings withdrawn","Gift received","Other income"];
+var SAVINGS_IN = "Savings & investment";
+var SAVINGS_OUT = "Savings withdrawn";
+/* Cash that arrives but was never earned. It must not stand in for a salary. */
+var NOT_EARNINGS = ["Loan repaid to me", SAVINGS_OUT];
 var SADAQAH_CATS = ["Donation & sadaqah","Help to relatives"];
 var SEND_CATS = ["Family support","Help to relatives"];
 
@@ -55,6 +59,7 @@ function freshData(){
     settings: {
       monthlyIncome: 0,
       donationGoal: 70,
+      savingsGoal: 200,
       semesterFee: 400,
       semesterMonths: 6,
       goldPerGram: 120,
@@ -255,7 +260,7 @@ function isFixedPaid(fc, key){
    It must not stand in for your salary when working out the plan. */
 function loanRepaidIn(key){
   return monthTx(key).reduce(function(a,t){
-    return (t.type === "income" && t.category === "Loan repaid to me") ? a + txMain(t) : a;
+    return (t.type === "income" && NOT_EARNINGS.indexOf(t.category) >= 0) ? a + txMain(t) : a;
   },0);
 }
 function monthEarned(key){ return sumTx(monthTx(key), "income") - loanRepaidIn(key); }
@@ -321,6 +326,39 @@ function budgetFoot(st){
   return {cls:"", text: money(st.left) + " left"};
 }
 
+/* Money moved into savings this month, less anything taken back out. */
+function savedInMonth(key){
+  return monthTx(key).reduce(function(a,t){
+    if(t.type === "expense" && t.category === SAVINGS_IN) return a + txMain(t);
+    if(t.type === "income"  && t.category === SAVINGS_OUT) return a - txMain(t);
+    return a;
+  },0);
+}
+/* Everything put away, all months together. This is your pot, not spending. */
+function savingsPot(){
+  return S.tx.reduce(function(a,t){
+    if(t.type === "expense" && t.category === SAVINGS_IN) return a + txMain(t);
+    if(t.type === "income"  && t.category === SAVINGS_OUT) return a - txMain(t);
+    return a;
+  },0);
+}
+function savingsState(key){
+  var goal = num(S.settings.savingsGoal);
+  var done = savedInMonth(key);
+  var thisMonth = (key === todayISO().slice(0,7));
+  var p = key.split("-");
+  var daysInMonth = new Date(Number(p[0]), Number(p[1]), 0).getDate();
+  var dayNow = thisMonth ? new Date().getDate() : daysInMonth;
+  var daysLeft = Math.max(0, daysInMonth - dayNow);
+  return {
+    goal: goal, done: done, left: Math.max(0, goal - done),
+    met: goal > 0 && done >= goal,
+    pct: goal > 0 ? Math.min(100, done / goal * 100) : 0,
+    daysLeft: daysLeft, isThisMonth: thisMonth,
+    urgent: thisMonth && goal > 0 && done < goal && daysLeft <= 7
+  };
+}
+
 function sadaqahPaid(key){
   return SADAQAH_CATS.reduce(function(a,c){ return a + catSpent(key,c); },0);
 }
@@ -363,6 +401,8 @@ function render(){
 }
 
 function renderAlerts(){
+  var out = "";
+
   var hits = watchedCategories().map(function(c){ return budgetState(c, curMonth); })
     .filter(function(st){ return st.level !== "ok"; })
     .sort(function(a,b){
@@ -370,22 +410,45 @@ function renderAlerts(){
       return rank[a.level] - rank[b.level];
     });
 
-  if(!hits.length){ $("hAlerts").innerHTML = ""; return; }
+  if(hits.length){
+    var worst = hits[0].level === "yolo" ? "" : " stop";
+    out +=
+      '<div class="card alertcard'+worst+'">'+
+        '<div class="card-head"><h2>Watch your limits</h2></div>'+
+        hits.map(function(st){
+          var f = budgetFoot(st);
+          return '<div class="alertline">'+
+            '<div class="grow"><div class="name">'+esc(st.cat)+'</div>'+
+            '<div class="budgetfoot '+f.cls+'">'+esc(f.text)+'</div></div>'+
+            '<div class="num">'+money(st.spent)+' / '+money(st.limit)+'</div>'+
+            budgetBadge(st)+
+          '</div>';
+        }).join("")+
+      '</div>';
+  }
 
-  var worst = hits[0].level === "yolo" ? "" : " stop";
-  $("hAlerts").innerHTML =
-    '<div class="card alertcard'+worst+'">'+
-      '<div class="card-head"><h2>Watch your limits</h2></div>'+
-      hits.map(function(st){
-        var f = budgetFoot(st);
-        return '<div class="alertline">'+
-          '<div class="grow"><div class="name">'+esc(st.cat)+'</div>'+
-          '<div class="budgetfoot '+f.cls+'">'+esc(f.text)+'</div></div>'+
-          '<div class="num">'+money(st.spent)+' / '+money(st.limit)+'</div>'+
-          budgetBadge(st)+
-        '</div>';
-      }).join("")+
-    '</div>';
+  /* The monthly reminder to put money away. It only shows for the month
+     you are actually in, and it goes away the moment the goal is met. */
+  var sv = savingsState(curMonth);
+  if(sv.isThisMonth && sv.goal > 0 && !sv.met){
+    var head = sv.urgent ? "Save before the month ends" : "Set money aside this month";
+    var line = sv.daysLeft === 0
+      ? "Last day of the month."
+      : sv.urgent
+        ? "Only " + sv.daysLeft + " days left."
+        : sv.daysLeft + " days left in the month.";
+    out +=
+      '<div class="card alertcard'+(sv.urgent ? " stop" : "")+'">'+
+        '<div class="card-head"><h2>'+esc(head)+'</h2></div>'+
+        '<div class="alertline">'+
+          '<div class="grow"><div class="name">'+esc(money(sv.left))+' still to save or invest</div>'+
+          '<div class="budgetfoot '+(sv.urgent ? "bad" : "")+'">'+esc(line)+'</div></div>'+
+          '<button class="btn sm" id="alertSaveAdd">Record it</button>'+
+        '</div>'+
+      '</div>';
+  }
+
+  $("hAlerts").innerHTML = out;
 }
 
 function renderHome(){
@@ -431,6 +494,26 @@ function renderHome(){
   $("hDonNote").textContent = given >= goal
     ? "Your monthly amount is complete. Anything more is extra, inshallah."
     : money(Math.max(0, goal - given)) + " left to reach your monthly amount. Help given to relatives counts here too.";
+
+  // savings and investment
+  var sv = savingsState(curMonth);
+  $("hSaveCard").hidden = num(S.settings.savingsGoal) <= 0;
+  $("hSaveRight").textContent = money(sv.done) + " of " + money(sv.goal);
+  $("hSaveBar").style.width = sv.pct + "%";
+  $("hSaveBar").className = sv.met ? "good" : (sv.urgent ? "warn" : "");
+  $("hSavePot").textContent = money(savingsPot());
+  $("hSaveAdd").hidden = sv.met;
+  if(sv.met){
+    $("hSaveNote").textContent = "Done for this month, alhamdulillah. Anything more is extra.";
+  }else if(!sv.isThisMonth){
+    $("hSaveNote").textContent = money(sv.left) + " short that month.";
+  }else if(sv.daysLeft === 0){
+    $("hSaveNote").textContent = "Last day of the month. " + money(sv.left) + " still to set aside.";
+  }else if(sv.urgent){
+    $("hSaveNote").textContent = money(sv.left) + " still to set aside, and only " + sv.daysLeft + " days left.";
+  }else{
+    $("hSaveNote").textContent = money(sv.left) + " still to set aside this month.";
+  }
 
   // budgets
   var bk = watchedCategories();
@@ -679,6 +762,7 @@ function renderSettings(){
     : "Rates have not been fetched yet. The starting values are only a guess — update them.";
   $("setIncome").value = st.monthlyIncome || "";
   $("setDonation").value = st.donationGoal || "";
+  $("setSaveGoal").value = st.savingsGoal || "";
   $("setSemFee").value = st.semesterFee || "";
   $("setSemMonths").value = st.semesterMonths || 6;
   var per = num(st.semesterMonths) > 0 ? num(st.semesterFee)/num(st.semesterMonths) : 0;
@@ -834,6 +918,26 @@ function showScreen(name){
   if(name === "news") loadNews(false);
   if(name === "settings") loadScriptCode();
 }
+
+/* Both "Record it" buttons open the spending form ready for a deposit. */
+function startSavingsEntry(){
+  showScreen("spend");
+  txType = "expense";
+  document.querySelectorAll("#txTypeSeg button").forEach(function(x){
+    x.setAttribute("aria-selected", x.dataset.type === "expense" ? "true" : "false");
+  });
+  fillSelect($("txCat"), EXPENSE_CATS, SAVINGS_IN);
+  togglePerson();
+  var sv = savingsState(curMonth);
+  $("txAmount").value = sv.left > 0 ? round2(sv.left) : "";
+  $("txDate").value = todayISO();
+  $("txAmount").focus();
+  $("txAmount").select();
+}
+document.addEventListener("click", function(ev){
+  var b = ev.target.closest("#hSaveAdd,#alertSaveAdd");
+  if(b) startSavingsEntry();
+});
 
 document.querySelectorAll(".tab").forEach(function(b){
   b.addEventListener("click", function(){ showScreen(b.dataset.scr); });
@@ -1061,7 +1165,7 @@ document.querySelectorAll("#newsSeg button").forEach(function(b){
 $("newsRefresh").addEventListener("click", function(){ loadNews(true); });
 
 /* --- settings --- */
-var setMap = {setIncome:"monthlyIncome", setDonation:"donationGoal", setSemFee:"semesterFee", setSemMonths:"semesterMonths"};
+var setMap = {setIncome:"monthlyIncome", setDonation:"donationGoal", setSaveGoal:"savingsGoal", setSemFee:"semesterFee", setSemMonths:"semesterMonths"};
 Object.keys(setMap).forEach(function(id){
   $(id).addEventListener("change", function(){
     S.settings[setMap[id]] = num($(id).value);

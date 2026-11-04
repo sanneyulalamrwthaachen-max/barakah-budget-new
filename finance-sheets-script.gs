@@ -474,6 +474,91 @@ function getRates() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Monthly savings reminder by email                                   */
+/* ------------------------------------------------------------------ */
+/*
+ * This emails you near the end of each month if you have not reached
+ * your savings goal. It works even when the app is closed.
+ *
+ * To switch it on: pick  setupMonthlyReminder  in the function list at
+ * the top of this editor and press Run. Once only.
+ * To switch it off: pick  removeMonthlyReminder  and press Run.
+ */
+
+var REMINDER_DAY = 25;     // day of the month the email is sent
+var REMINDER_HOUR = 18;    // roughly this hour, your local time
+
+function setupMonthlyReminder() {
+  removeMonthlyReminder();
+  ScriptApp.newTrigger('monthlyReminder')
+    .timeBased()
+    .onMonthDay(REMINDER_DAY)
+    .atHour(REMINDER_HOUR)
+    .create();
+  Logger.log('Reminder set for day ' + REMINDER_DAY + ' of each month.');
+}
+
+function removeMonthlyReminder() {
+  var all = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].getHandlerFunction() === 'monthlyReminder') {
+      ScriptApp.deleteTrigger(all[i]);
+    }
+  }
+}
+
+function monthlyReminder() {
+  var data = loadAll();
+  var goal = Number((data.settings || {}).savingsGoal || 0);
+  if (!goal) return;
+
+  var now = new Date();
+  var key = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+  var rates = (data.settings || {}).rates || { EUR: 1 };
+  var main = (data.settings || {}).mainCurrency || 'EUR';
+
+  function toMain(amount, code) {
+    var per = Number(rates[code || 'EUR']) || 1;
+    var mainRate = Number(rates[main]) || 1;
+    return (Number(amount) / per) * mainRate;
+  }
+
+  var saved = 0;
+  var tx = data.tx || [];
+  for (var i = 0; i < tx.length; i++) {
+    var t = tx[i];
+    if (String(t.date || '').slice(0, 7) !== key) continue;
+    if (t.type === 'expense' && t.category === 'Savings & investment') {
+      saved += toMain(t.amount, t.currency);
+    } else if (t.type === 'income' && t.category === 'Savings withdrawn') {
+      saved -= toMain(t.amount, t.currency);
+    }
+  }
+
+  if (saved >= goal) return;   // nothing to nag about
+
+  var left = goal - saved;
+  var last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  var daysLeft = last - now.getDate();
+  var monthName = Utilities.formatDate(now, Session.getScriptTimeZone(), 'MMMM yyyy');
+
+  var body =
+    'Assalamu alaikum,\n\n' +
+    'A reminder about your savings for ' + monthName + '.\n\n' +
+    '  Goal this month : ' + goal.toFixed(2) + ' ' + main + '\n' +
+    '  Set aside so far: ' + saved.toFixed(2) + ' ' + main + '\n' +
+    '  Still to save   : ' + left.toFixed(2) + ' ' + main + '\n' +
+    '  Days left       : ' + daysLeft + '\n\n' +
+    'Open Barakah Budget to record it once it is done.\n';
+
+  MailApp.sendEmail({
+    to: Session.getEffectiveUser().getEmail(),
+    subject: 'Savings reminder: ' + left.toFixed(2) + ' ' + main + ' left for ' + monthName,
+    body: body
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Run this once from the editor if you want to create the sheet early */
 /* ------------------------------------------------------------------ */
 
