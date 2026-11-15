@@ -163,7 +163,10 @@
         <label class="field" id="dAmountWrap">Amount borrowed<input type="number" id="dAmount" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></label>
         <label class="field">Currency<select id="dCur"></select></label>
       </div>
-      <label class="field">Note<input type="text" id="dNote" placeholder="anything you want to remember"></label>
+      <div class="grid2">
+        <label class="field">Note<input type="text" id="dNote" placeholder="anything you want to remember"></label>
+        <label class="field" id="dDueWrap">Pay back by (optional)<input type="date" id="dDue"></label>
+      </div>
       <button class="btn" id="dAdd">Add loan</button>
     </div>
 
@@ -378,6 +381,32 @@
       </div>
       <pre id="codeView"></pre>
     </details>
+
+    <div class="card">
+      <div class="card-head"><h2>Export to a spreadsheet</h2></div>
+      <p class="note">Each one matches a block in the Barakah Budget workbook. <strong>Copy</strong> pastes straight into Google Sheets or Excel. <strong>Download</strong> saves a .csv file.</p>
+      <label class="field">What to export
+        <select id="expWhat">
+          <option value="tx">Every record — paste into Transactions, cell A5</option>
+          <option value="owe">Money I owe — paste into Investments &amp; Loans, cell A42</option>
+          <option value="lent">Money owed to me — paste into Investments &amp; Loans, cell A65</option>
+          <option value="inv">What I put away — paste into Investments &amp; Loans, cell A8</option>
+        </select>
+      </label>
+      <label class="field">Months to include
+        <select id="expRange">
+          <option value="all">Everything</option>
+          <option value="month">This month only</option>
+          <option value="year">This year only</option>
+        </select>
+      </label>
+      <div class="btnrow">
+        <button class="btn sm" id="expCopy">Copy</button>
+        <button class="btn sm sec" id="expDownload">Download .csv</button>
+      </div>
+      <p class="note" id="expNote"></p>
+      <textarea id="expBox" rows="5" spellcheck="false" placeholder="Press Copy or Download and the rows appear here too, in case you want to select them by hand."></textarea>
+    </div>
 
     <div class="card">
       <div class="card-head"><h2>Backup</h2></div>

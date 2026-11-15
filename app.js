@@ -624,7 +624,10 @@ function debtEditor(d){
       '<label class="field">Amount'+'<input type="number" inputmode="decimal" step="0.01" min="0" value="'+esc(num(d.original))+'" data-dedit="'+k+'|originalB"></label>'+
     '</div>'+
     '<label class="field">Currency<select data-dedit="'+k+'|currency">'+curOptions(d.currency||"EUR")+'</select></label>'+
-    '<label class="field">Note<input type="text" value="'+esc(d.note||"")+'" data-dedit="'+k+'|note"></label>'+
+    '<div class="grid2">'+
+      '<label class="field">Note<input type="text" value="'+esc(d.note||"")+'" data-dedit="'+k+'|note"></label>'+
+      '<label class="field">'+(isOwedToMe(d)?"Expected back by":"Pay back by")+'<input type="date" value="'+esc(d.dueBy||"")+'" data-dedit="'+k+'|dueBy"></label>'+
+    '</div>'+
     '<div class="btnrow"><button class="btn sm" data-ddone="'+k+'">Done</button></div>'+
   '</div>';
 }
@@ -1075,6 +1078,7 @@ document.addEventListener("click", function(ev){
 function paintDebtForm(){
   var owed = debtDir === "theyowe";
   $("dWhoWrap").childNodes[0].nodeValue = owed ? "Who owes you" : "Who you owe it to";
+  $("dDueWrap").childNodes[0].nodeValue = owed ? "Expected back by (optional)" : "Pay back by (optional)";
   $("dAmountWrap").childNodes[0].nodeValue = owed ? "Amount you lent" : "Amount borrowed";
   $("dWho").placeholder = owed ? "Person who took it" : "Person, bank or office";
 }
@@ -1093,9 +1097,9 @@ $("dAdd").addEventListener("click", function(){
   if(!name){ toast("Give the loan a title first."); return; }
   if(amt <= 0){ toast(debtDir === "theyowe" ? "Type the amount you lent." : "Type the amount you borrowed."); return; }
   S.debts.push({id:uid(), lender:name, direction:debtDir, type:$("dType").value, who:$("dWho").value.trim(),
-    original:amt, currency:$("dCur").value || "EUR",
+    original:amt, currency:$("dCur").value || "EUR", dueBy:$("dDue").value || "",
     note:$("dNote").value.trim(), createdAt:todayISO()});
-  $("dLender").value=""; $("dAmount").value=""; $("dNote").value=""; $("dWho").value="";
+  $("dLender").value=""; $("dAmount").value=""; $("dNote").value=""; $("dWho").value=""; $("dDue").value="";
   persist(); render(); toast(debtDir === "theyowe" ? "Added to money owed to you." : "Loan added.");
 });
 $("sendAdd").addEventListener("click", function(){
@@ -1347,6 +1351,132 @@ function selectCode(){
   var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
   toast("Copy did not work. The code is selected — copy it by hand.");
 }
+
+/* ---------------- export ---------------- */
+/* Column order matches the workbook exactly, typed columns only, so a paste
+   never lands on one of its formula columns. */
+var EXPORTS = {
+  tx: {
+    name: "barakah-records",
+    head: ["Date","In or out","Category","Amount","Currency","Note"],
+    rows: function(keep){
+      return S.tx.filter(function(t){ return keep(t.date); })
+        .slice().sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); })
+        .map(function(t){
+          var note = [t.note, t.person].filter(Boolean).join(" - ");
+          return [t.date, t.type === "income" ? "In" : "Out", t.category,
+                  num(t.amount), t.currency || "EUR", note];
+        });
+    }
+  },
+  owe: {
+    name: "barakah-money-i-owe",
+    head: ["Title of the loan","Kind","Who I owe","Borrowed","Currency","Paid back so far","Due by"],
+    rows: function(){
+      return debtsByDir("iowe").map(function(d){
+        var paid = S.tx.reduce(function(a,t){
+          return t.debtId === d.id ? a + num(t.amount) : a;
+        },0);
+        return [d.lender || "", d.type || "", d.who || "", num(d.original),
+                d.currency || "EUR", round2(paid), d.dueBy || ""];
+      });
+    }
+  },
+  lent: {
+    name: "barakah-owed-to-me",
+    head: ["Title of the loan","Kind","Who owes me","Lent","Currency","Got back so far","Expected by"],
+    rows: function(){
+      return debtsByDir("theyowe").map(function(d){
+        var back = S.tx.reduce(function(a,t){
+          return t.debtId === d.id ? a + num(t.amount) : a;
+        },0);
+        return [d.lender || "", d.type || "", d.who || "", num(d.original),
+                d.currency || "EUR", round2(back), d.dueBy || ""];
+      });
+    }
+  },
+  inv: {
+    name: "barakah-put-away",
+    head: ["Date","What it is","Kind","Amount","Currency","Where it is held","Sold / taken out?","Note"],
+    rows: function(keep){
+      return S.tx.filter(function(t){
+          return keep(t.date) &&
+            ((t.type === "expense" && t.category === SAVINGS_IN) ||
+             (t.type === "income"  && t.category === SAVINGS_OUT));
+        })
+        .slice().sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); })
+        .map(function(t){
+          var out = (t.type === "income");
+          return [t.date, out ? "Taken back out" : "Money put away", "Cash savings",
+                  num(t.amount), t.currency || "EUR", "", out ? "Yes" : "No", t.note || ""];
+        });
+    }
+  }
+};
+
+function exportKeeper(){
+  var mode = $("expRange").value;
+  var nowMonth = todayISO().slice(0,7);
+  var nowYear = nowMonth.slice(0,4);
+  if(mode === "month") return function(d){ return String(d||"").slice(0,7) === nowMonth; };
+  if(mode === "year")  return function(d){ return String(d||"").slice(0,4) === nowYear; };
+  return function(){ return true; };
+}
+
+function buildExport(sep){
+  var spec = EXPORTS[$("expWhat").value] || EXPORTS.tx;
+  var rows = spec.rows(exportKeeper());
+  var all = [spec.head].concat(rows);
+  var text = all.map(function(line){
+    return line.map(function(v){
+      var s = (v === null || v === undefined) ? "" : String(v);
+      if(sep === "\t") return s.replace(/[\t\r\n]+/g, " ");
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(sep);
+  }).join("\r\n");
+  return {text: text, count: rows.length, name: spec.name};
+}
+
+$("expCopy").addEventListener("click", function(){
+  /* Tab separated, because that is what drops into spreadsheet columns cleanly. */
+  var r = buildExport("\t");
+  $("expBox").value = r.text;
+  if(!r.count){ $("expNote").textContent = "Nothing to export there yet."; return; }
+  var done = function(){
+    $("expNote").textContent = r.count + " rows copied. Click the first cell in the workbook and paste.";
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(r.text).then(done, function(){
+      $("expBox").select();
+      $("expNote").textContent = "Copying was blocked. The rows are selected below — copy them by hand.";
+    });
+  }else{
+    $("expBox").select();
+    $("expNote").textContent = "The rows are selected below — copy them by hand.";
+  }
+});
+
+$("expDownload").addEventListener("click", function(){
+  var r = buildExport(",");
+  $("expBox").value = r.text;
+  if(!r.count){ $("expNote").textContent = "Nothing to export there yet."; return; }
+  try{
+    /* The BOM keeps accents and the euro sign intact when Excel opens it. */
+    var blob = new Blob(["\ufeff" + r.text], {type:"text/csv;charset=utf-8"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = r.name + "-" + todayISO() + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+    $("expNote").textContent = r.count + " rows saved as " + a.download;
+  }catch(e){
+    $("expBox").select();
+    $("expNote").textContent = "This browser would not save the file. The rows are below — copy them instead.";
+  }
+});
 
 $("backupShow").addEventListener("click", function(){ $("backupBox").value = JSON.stringify(S); });
 $("backupCopy").addEventListener("click", function(){
