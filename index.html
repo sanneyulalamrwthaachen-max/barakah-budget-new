@@ -89,6 +89,12 @@
 
   <!-- ============ SPENDING ============ -->
   <section class="screen" id="scr-spend" hidden>
+    <div class="seg" id="spViewSeg">
+      <button data-view="entry" aria-selected="true">Records</button>
+      <button data-view="overview" aria-selected="false">Overview</button>
+    </div>
+
+    <div id="spEntryView">
     <div class="card">
       <div class="card-head"><h2>Add a record</h2></div>
       <div class="seg" id="txTypeSeg">
@@ -124,6 +130,48 @@
         <select id="spFilter"></select>
       </label>
       <div class="list" id="spList"></div>
+    </div>
+    </div>
+
+    <div id="spOverView" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Spending overview</h2></div>
+        <label class="field">Period
+          <select id="ovPeriod">
+            <option value="month">This month</option>
+            <option value="last">Last month</option>
+            <option value="3m">Last 3 months</option>
+            <option value="year">This year</option>
+            <option value="all">Everything</option>
+          </select>
+        </label>
+        <div class="tiles four">
+          <div class="tile"><div class="k">Spent</div><div class="v" id="ovOut">—</div></div>
+          <div class="tile"><div class="k">Received</div><div class="v good" id="ovIn">—</div></div>
+          <div class="tile"><div class="k">Difference</div><div class="v" id="ovNet">—</div></div>
+          <div class="tile"><div class="k">Per day</div><div class="v" id="ovDay">—</div></div>
+        </div>
+        <p class="note" id="ovSpan"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Every category</h2><div class="right" id="ovCount"></div></div>
+        <div class="seg" id="ovSortSeg">
+          <button data-sort="amount" aria-selected="true">Biggest first</button>
+          <button data-sort="name" aria-selected="false">A to Z</button>
+        </div>
+        <div class="list" id="ovCats"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Month by month</h2><div class="right">money out</div></div>
+        <div id="ovTrend"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Money coming in</h2></div>
+        <div class="list" id="ovIncome"></div>
+      </div>
     </div>
   </section>
 

@@ -142,6 +142,9 @@ var txType = "expense";
 var editingDebt = "";
 var editingTx = "";
 var debtDir = "iowe";
+var spView = "entry";
+var ovSort = "amount";
+var ovOpenCat = "";
 var newsCache = null;
 
 /* ---------------- helpers ---------------- */
@@ -392,9 +395,14 @@ function paintCurrencyLabels(){
 function render(){
   paintCurrencyLabels();
   $("mLabel").textContent = monthLabel(curMonth);
-  $("monthbar").hidden = (activeScreen === "zakat" || activeScreen === "news" || activeScreen === "settings");
+  $("monthbar").hidden = (activeScreen === "zakat" || activeScreen === "news" ||
+    activeScreen === "settings" || (activeScreen === "spend" && spView === "overview"));
   if(activeScreen === "home"){ renderAlerts(); renderHome(); }
-  if(activeScreen === "spend") renderSpend();
+  if(activeScreen === "spend"){
+    $("spEntryView").hidden = (spView !== "entry");
+    $("spOverView").hidden = (spView !== "overview");
+    if(spView === "entry") renderSpend(); else renderOverview();
+  }
   if(activeScreen === "debt") renderDebt();
   if(activeScreen === "zakat") renderZakat();
   if(activeScreen === "settings") renderSettings();
@@ -594,6 +602,176 @@ function txEditor(t, locked){
     '<label class="field">Note<input type="text" value="'+esc(t.note||"")+'" data-tedit="'+k+'|note"></label>'+
     '<div class="btnrow"><button class="btn sm" data-tdone="'+k+'">Done</button></div>'+
   '</div>';
+}
+
+/* ---------------- overview ---------------- */
+
+/* Returns the first and last month keys of the chosen period, inclusive. */
+function ovWindow(){
+  var now = todayISO().slice(0,7);
+  var mode = $("ovPeriod") ? $("ovPeriod").value : "month";
+  if(mode === "month") return {from: now, to: now, label: monthLabel(now)};
+  if(mode === "last"){
+    var p = shiftMonth(now, -1);
+    return {from: p, to: p, label: monthLabel(p)};
+  }
+  if(mode === "3m"){
+    var f = shiftMonth(now, -2);
+    return {from: f, to: now, label: monthLabel(f) + " to " + monthLabel(now)};
+  }
+  if(mode === "year"){
+    var y = now.slice(0,4);
+    return {from: y + "-01", to: y + "-12", label: "Year " + y};
+  }
+  var keys = S.tx.map(function(t){ return String(t.date||"").slice(0,7); })
+    .filter(Boolean).sort();
+  if(!keys.length) return {from: now, to: now, label: "Everything"};
+  return {from: keys[0], to: keys[keys.length-1],
+          label: "Everything, " + monthLabel(keys[0]) + " to " + monthLabel(keys[keys.length-1])};
+}
+
+function inWindow(t, w){
+  var k = String(t.date||"").slice(0,7);
+  return k >= w.from && k <= w.to;
+}
+
+/* How many days the period actually covers, so "per day" means something. */
+function ovDays(w){
+  var a = w.from.split("-"), b = w.to.split("-");
+  var start = new Date(Number(a[0]), Number(a[1])-1, 1);
+  var endOfTo = new Date(Number(b[0]), Number(b[1]), 0);
+  /* Midnight on both ends, or the time of day skews the count by a day. */
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var end = (endOfTo > today) ? today : endOfTo;
+  return Math.max(1, Math.round((end - start) / 86400000) + 1);
+}
+
+function renderOverview(){
+  var w = ovWindow();
+  var rows = S.tx.filter(function(t){ return inWindow(t, w); });
+
+  var out = rows.reduce(function(a,t){ return t.type === "expense" ? a + txMain(t) : a; },0);
+  var inc = rows.reduce(function(a,t){ return t.type === "income"  ? a + txMain(t) : a; },0);
+  var days = ovDays(w);
+
+  $("ovOut").textContent = money(out);
+  $("ovIn").textContent = money(inc);
+  $("ovNet").textContent = money(inc - out);
+  $("ovNet").parentNode.className = "tile " + ((inc - out) < 0 ? "bad" : "good");
+  $("ovDay").textContent = money(out / days);
+  $("ovSpan").textContent = w.label + " \u00b7 " + days + " days \u00b7 " + rows.length +
+    (rows.length === 1 ? " record" : " records");
+
+  /* --- every category --- */
+  var byCat = {};
+  rows.forEach(function(t){
+    if(t.type !== "expense") return;
+    var c = t.category || "Other";
+    if(!byCat[c]) byCat[c] = {total:0, n:0, items:[]};
+    byCat[c].total += txMain(t);
+    byCat[c].n += 1;
+    byCat[c].items.push(t);
+  });
+
+  /* Every spending category is listed, including the ones at zero, so you can
+     see what you did NOT spend on as well. */
+  var names = EXPENSE_CATS.slice();
+  Object.keys(byCat).forEach(function(c){ if(names.indexOf(c) < 0) names.push(c); });
+
+  if(ovSort === "amount"){
+    names.sort(function(a,b){
+      var ta = byCat[a] ? byCat[a].total : 0, tb = byCat[b] ? byCat[b].total : 0;
+      if(tb !== ta) return tb - ta;
+      return a.localeCompare(b);
+    });
+  }else{
+    names.sort(function(a,b){ return a.localeCompare(b); });
+  }
+
+  var used = names.filter(function(c){ return byCat[c]; }).length;
+  $("ovCount").textContent = used + " of " + names.length + " used";
+
+  $("ovCats").innerHTML = names.map(function(c){
+    var d = byCat[c];
+    var total = d ? d.total : 0;
+    var n = d ? d.n : 0;
+    var share = out > 0 ? total / out * 100 : 0;
+    var lim = num(S.budgets[c]);
+    var open = (ovOpenCat === c && n > 0);
+
+    var sub = [];
+    sub.push(n + (n === 1 ? " record" : " records"));
+    if(n > 0) sub.push("avg " + money(total / n));
+    if(lim > 0 && w.from === w.to) sub.push("limit " + money(lim));
+
+    var detail = "";
+    if(open){
+      var items = d.items.slice().sort(function(a,b){
+        return String(b.date).localeCompare(String(a.date));
+      }).slice(0, 25);
+      detail = '<div class="catdetail">' + items.map(function(t){
+        var label = [t.note, t.person].filter(Boolean).join(" \u00b7 ") || "\u2014";
+        var orig = origNote(t);
+        return '<div class="ln"><span class="d">'+esc(String(t.date).slice(5))+'</span>'+
+          '<span class="t">'+esc(label)+(orig ? ' <span style="opacity:.7">('+esc(orig)+')</span>' : '')+'</span>'+
+          '<span class="a">'+money(txMain(t))+'</span></div>';
+      }).join("") +
+      (d.items.length > 25 ? '<div class="ln"><span class="t">and '+(d.items.length-25)+' more</span></div>' : '') +
+      '</div>';
+    }
+
+    return '<div class="catrow" tabindex="0" role="button" data-ovcat="'+esc(c)+'" '+
+        'aria-expanded="'+(open?"true":"false")+'">'+
+      '<div class="top"><span class="nm" style="'+(total?"":"opacity:.45")+'">'+esc(c)+'</span>'+
+        '<span class="amt">'+money(total)+'</span>'+
+        '<span class="shr">'+(total ? share.toFixed(0)+"%" : "")+'</span></div>'+
+      (total ? '<div class="bar"><i style="width:'+Math.max(2,share)+'%"></i></div>' : '')+
+      (total ? '<div class="catsub">'+esc(sub.join(" \u00b7 "))+'</div>' : '')+
+      detail+
+    '</div>';
+  }).join("");
+
+  /* --- month by month --- */
+  var months = [];
+  var cur = w.from;
+  var guard = 0;
+  while(cur <= w.to && guard < 120){ months.push(cur); cur = shiftMonth(cur, 1); guard++; }
+  if(months.length > 12) months = months.slice(months.length - 12);
+
+  var perMonth = months.map(function(k){
+    return {key: k, total: S.tx.reduce(function(a,t){
+      return (t.type === "expense" && String(t.date||"").slice(0,7) === k) ? a + txMain(t) : a;
+    },0)};
+  });
+  var peak = Math.max.apply(null, perMonth.map(function(m){ return m.total; }).concat([1]));
+  var nowKey = todayISO().slice(0,7);
+
+  $("ovTrend").innerHTML = perMonth.length
+    ? '<div class="trend">' + perMonth.map(function(m){
+        var h = Math.max(2, m.total / peak * 100);
+        var short = monthLabel(m.key).split(" ")[0].slice(0,3);
+        return '<div class="tcol'+(m.key === nowKey ? " now" : "")+'" title="'+esc(monthLabel(m.key))+'">'+
+          '<div class="val">'+(m.total ? Math.round(m.total) : "")+'</div>'+
+          '<div class="stack"><div class="fill" style="height:'+h+'%"></div></div>'+
+          '<div class="lbl">'+esc(short)+'</div></div>';
+      }).join("") + '</div>'
+    : '<div class="empty">Nothing to chart yet.</div>';
+
+  /* --- money in --- */
+  var byInc = {};
+  rows.forEach(function(t){
+    if(t.type !== "income") return;
+    var c = t.category || "Other income";
+    byInc[c] = (byInc[c] || 0) + txMain(t);
+  });
+  var incKeys = Object.keys(byInc).sort(function(a,b){ return byInc[b] - byInc[a]; });
+  $("ovIncome").innerHTML = incKeys.length ? incKeys.map(function(c){
+    var p = inc > 0 ? byInc[c] / inc * 100 : 0;
+    return '<div class="row"><div class="grow name">'+esc(c)+'</div>'+
+      '<div class="num">'+money(byInc[c])+'</div>'+
+      '<div class="pill">'+p.toFixed(0)+'%</div></div>';
+  }).join("") : '<div class="empty">No money in recorded for this period.</div>';
 }
 
 function renderSpend(){
@@ -995,6 +1173,42 @@ $("txAdd").addEventListener("click", function(){
   render();
 });
 $("spFilter").addEventListener("change", renderSpend);
+
+document.querySelectorAll("#spViewSeg button").forEach(function(b){
+  b.addEventListener("click", function(){
+    spView = b.dataset.view;
+    document.querySelectorAll("#spViewSeg button").forEach(function(x){
+      x.setAttribute("aria-selected", x === b ? "true" : "false");
+    });
+    window.scrollTo({top:0, behavior:"auto"});
+    render();
+  });
+});
+document.querySelectorAll("#ovSortSeg button").forEach(function(b){
+  b.addEventListener("click", function(){
+    ovSort = b.dataset.sort;
+    document.querySelectorAll("#ovSortSeg button").forEach(function(x){
+      x.setAttribute("aria-selected", x === b ? "true" : "false");
+    });
+    renderOverview();
+  });
+});
+$("ovPeriod").addEventListener("change", function(){ ovOpenCat = ""; renderOverview(); });
+
+/* Tap a category to see the records behind the number. */
+function toggleCat(ev){
+  var el = ev.target.closest("[data-ovcat]");
+  if(!el) return;
+  ovOpenCat = (ovOpenCat === el.dataset.ovcat) ? "" : el.dataset.ovcat;
+  renderOverview();
+}
+document.addEventListener("click", toggleCat);
+document.addEventListener("keydown", function(ev){
+  if(ev.key !== "Enter" && ev.key !== " ") return;
+  if(!ev.target.closest || !ev.target.closest("[data-ovcat]")) return;
+  ev.preventDefault();
+  toggleCat(ev);
+});
 
 /* --- delegated clicks --- */
 document.addEventListener("click", function(ev){
